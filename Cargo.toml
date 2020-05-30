@@ -7,8 +7,8 @@ description = "A native rust git library"
 readme = "README.md"
 repository = "https://github.com/lnds/rs-git-lib"
 license = "MIT OR Apache 2.0"
-license-file = "LICENSE"
 keywords = ["git"]
+categories = ["development-tools"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
