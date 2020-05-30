@@ -1,0 +1,15 @@
+[package]
+name = "rs-git-lib"
+version = "0.1.0"
+authors = ["Eduardo Díaz <ediaz@dcc8090.cl>"]
+edition = "2018"
+description = "A native rust git library"
+readme = "README.md"
+repository = "https://github.com/lnds/rs-git-lib"
+license = "MIT OR Apache 2.0"
+license-file = "LICENSE"
+keywords = ["git"]
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+url = "2.1.1"
