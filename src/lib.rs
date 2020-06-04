@@ -9,7 +9,6 @@ mod transport;
 use std::io::Result as IoResult;
 use transport::Transport;
 use crate::packfile::refs::Refs;
-use std::path::PathBuf;
 
 /// A Git Repository
 pub struct Repo {
@@ -48,6 +47,32 @@ impl Repo {
             dir,
             refs
         })
+    }
+
+    ///
+    /// return references of cloned repo
+    ///
+    /// ```
+    /// use rs_git_lib::Repo;
+    /// let repo = Repo::clone_from("https://github.com/lnds/rs-git-lib.git", None);
+    /// let refs = repo.unwrap().refs();
+    /// assert_eq!(refs[0].name, "HEAD");
+    /// assert_eq!(refs[1].name, "refs/heads/master");
+    /// ```
+    pub fn refs(self) -> Refs {
+        self.refs
+    }
+
+    ///
+    /// return references of cloned repo
+    ///
+    /// ```
+    /// use rs_git_lib::Repo;
+    /// let repo = Repo::clone_from("https://github.com/lnds/rs-git-lib.git", None).unwrap();
+    /// assert_eq!(repo.dir(), "rs-git-lib");
+    /// ```
+    pub fn dir(self) -> String {
+        self.dir
     }
 
 
