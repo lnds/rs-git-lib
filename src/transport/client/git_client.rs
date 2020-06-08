@@ -1,8 +1,9 @@
-use url::Url;
 use std::io::Result as IOResult;
+use url::Url;
 
+use crate::packfile::refs::{Ref, Refs};
+use crate::packfile::PackFileParser;
 use crate::transport::client::Protocol;
-use crate::packfile::refs::{Refs, Ref};
 
 #[derive(Debug)]
 pub struct GitProtocol {
@@ -20,7 +21,7 @@ impl Protocol for GitProtocol {
         unimplemented!()
     }
 
-    fn fetch_packfile(&mut self, _reference: &[Ref]) -> IOResult<Vec<u8>> {
+    fn fetch_packfile(&mut self, _reference: &[Ref]) -> IOResult<PackFileParser> {
         unimplemented!()
     }
 

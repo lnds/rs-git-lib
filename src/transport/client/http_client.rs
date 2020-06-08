@@ -1,10 +1,14 @@
+use reqwest::header::CONTENT_TYPE;
+use std::io::{BufReader, Error, ErrorKind, Result as IOResult};
 use url::Url;
-use std::io::{Error, ErrorKind, Result as IOResult};
 
-
+use super::packet::{
+    create_packfile_negotiation_request, parse_refs_lines, read_flush_packet, read_packet_line,
+    receive_packet, receive_packet_file_with_sideband, GIT_FLUSH_HEADER, GIT_UPLOAD_PACK_HEADER,
+};
+use crate::packfile::refs::{Ref, Refs};
+use crate::packfile::PackFileParser;
 use crate::transport::client::Protocol;
-use crate::packfile::refs::{Refs, Ref};
-use super::packet::{read_packet_line, read_flush_packet, receive, parse_refs_lines, GIT_UPLOAD_PACK_HEADER, GIT_FLUSH_HEADER};
 
 type Client = reqwest::blocking::Client;
 
@@ -12,7 +16,6 @@ type Client = reqwest::blocking::Client;
 pub struct HttpProtocol {
     url: Url,
     client: Client,
-
 }
 
 impl HttpProtocol {
@@ -25,6 +28,8 @@ impl HttpProtocol {
 }
 
 const REF_DISCOVERY_ENDPOINT: &str = "/info/refs?service=git-upload-pack";
+const REQUIRED_CAPABILTIES: [&str; 3] = ["multi_ack_detailed", "side-band-64k", "agent=git/1.8.1"];
+const UPLOAD_PACK_ENDPOINT: &str = "/git-upload-pack";
 
 impl Protocol for HttpProtocol {
     fn discover_refs(&mut self) -> IOResult<Refs> {
@@ -48,11 +53,24 @@ impl Protocol for HttpProtocol {
         if flush != GIT_FLUSH_HEADER {
             return Err(Error::new(ErrorKind::Other, "flush not received"));
         }
-        parse_refs_lines(&receive(&mut res)?)
+        parse_refs_lines(&receive_packet(&mut res)?)
     }
 
-    fn fetch_packfile(&mut self, _reference: &[Ref]) -> IOResult<Vec<u8>> {
-        unimplemented!()
+    fn fetch_packfile(&mut self, refs: &[Ref]) -> IOResult<PackFileParser> {
+        self.client = Client::new();
+        let body = create_packfile_negotiation_request(&REQUIRED_CAPABILTIES, refs);
+        let pack_endpoint = [self.url.as_str(), UPLOAD_PACK_ENDPOINT].join("");
+
+        let res = self
+            .client
+            .post(&pack_endpoint)
+            .header(CONTENT_TYPE, "application/x-git-upload-pack-request")
+            .body(body)
+            .send()
+            .map_err(|e| Error::new(ErrorKind::Other, e))?;
+
+        let mut reader = BufReader::with_capacity(16 * 1024, res);
+        receive_packet_file_with_sideband(&mut reader)
     }
 
     fn protocol(&self) -> &'static str {

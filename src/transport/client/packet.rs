@@ -1,5 +1,7 @@
+use crate::packfile::refs::{Ref, Refs};
+use crate::packfile::PackFileParser;
+use std::collections::HashMap;
 use std::io::{Error, ErrorKind, Read, Result as IOResult};
-use crate::packfile::refs::{Refs, Ref};
 
 pub(crate) const GIT_UPLOAD_PACK_HEADER: &[u8; 26] = b"# service=git-upload-pack\n";
 pub(crate) const GIT_FLUSH_HEADER: &[u8; 4] = b"0000";
@@ -24,7 +26,7 @@ pub(crate) fn read_flush_packet<R: Read>(reader: &mut R) -> IOResult<Option<Vec<
     Ok(Some(flush.to_vec()))
 }
 
-pub(crate) fn receive<R: Read>(reader: &mut R) -> IOResult<Vec<String>> {
+pub(crate) fn receive_packet<R: Read>(reader: &mut R) -> IOResult<Vec<String>> {
     let mut lines = vec![];
     loop {
         match read_packet_line(reader) {
@@ -38,10 +40,12 @@ pub(crate) fn receive<R: Read>(reader: &mut R) -> IOResult<Vec<String>> {
     }
 }
 
-
 pub(crate) fn parse_refs_lines(lines: &[String]) -> IOResult<Refs> {
     if lines.len() <= 1 {
-        return Err(Error::new(ErrorKind::Other, "parse_refs_lines need at least 1 line"));
+        return Err(Error::new(
+            ErrorKind::Other,
+            "parse_refs_lines need at least 1 line",
+        ));
     }
 
     let mut iter = lines.iter().map(|s| s.trim_end());
@@ -75,4 +79,48 @@ fn parse_ref_line(line: &str) -> Ref {
         id: obj_id.to_owned(),
         name: name.to_owned(),
     }
+}
+
+pub(crate) fn create_packfile_negotiation_request(capabilities: &[&str], refs: &[Ref]) -> String {
+    let mut lines: Vec<String> = Vec::with_capacity(refs.len());
+    let mut ids: HashMap<String, ()> = HashMap::new();
+    for (i, r) in refs.iter().enumerate() {
+        let &Ref { id: ref o, .. } = r;
+        if ids.contains_key(&r.id) {
+            continue;
+        }
+        ids.insert(r.id.to_string(), ());
+        if i == 0 {
+            let caps = capabilities.join(" ");
+            // if this is a space it is correctly multiplexed
+            let line: String = ["want ", &o[..], " ", &caps[..], "\n"].concat();
+            lines.push(packet_line(&line[..]));
+        } else {
+            let line: String = ["want ", &o[..], "\n"].concat();
+            lines.push(packet_line(&line[..]));
+        }
+    }
+    lines.push(flush_packet());
+    lines.push(packet_line("done\n"));
+    lines.concat()
+}
+
+fn packet_line(msg: &str) -> String {
+    format!("{:04x}{}", 4 + msg.len(), msg)
+}
+
+fn flush_packet() -> String {
+    format!("{:04x}", 0)
+}
+
+pub(crate) fn receive_packet_file_with_sideband<R: Read>(
+    reader: &mut R,
+) -> IOResult<PackFileParser> {
+    let mut parser = PackFileParser::new();
+    while let Some(line) = read_packet_line(reader)? {
+        if &line[..] != b"NAK\n" {
+            parser.add_line(&line)?;
+        }
+    }
+    Ok(parser)
 }

@@ -1,16 +1,16 @@
-
-mod url_parser;
 pub mod client;
+mod url_parser;
 
-use std::io::Result as IOResult;
-use url_parser::UrlType::{LOCAL, FILE, GIT, HTTP, SSH};
-use client::Protocol;
-use client::local_client::LocalProtocol;
+use crate::packfile::refs::{Ref, Refs};
+use crate::packfile::PackFileParser;
 use client::file_client::FileProtocol;
-use client::ssh_client::SshProtocol;
 use client::git_client::GitProtocol;
 use client::http_client::HttpProtocol;
-use crate::packfile::refs::{Refs, Ref};
+use client::local_client::LocalProtocol;
+use client::ssh_client::SshProtocol;
+use client::Protocol;
+use std::io::Result as IOResult;
+use url_parser::UrlType::{FILE, GIT, HTTP, LOCAL, SSH};
 
 pub struct Transport {
     client: Box<dyn Protocol>,
@@ -40,7 +40,7 @@ impl Transport {
         self.client.discover_refs()
     }
 
-    pub fn fetch_packfile(&mut self, wants: &[Ref]) -> IOResult<Vec<u8>> {
+    pub fn fetch_packfile(&mut self, wants: &[Ref]) -> IOResult<PackFileParser> {
         self.client.fetch_packfile(wants)
     }
 }
