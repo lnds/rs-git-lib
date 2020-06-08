@@ -122,5 +122,8 @@ pub(crate) fn receive_packet_file_with_sideband<R: Read>(
             parser.add_line(&line)?;
         }
     }
+    while !parser.eof() {
+        parser.parse()?;
+    }
     Ok(parser)
 }
