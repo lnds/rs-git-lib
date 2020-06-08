@@ -2,8 +2,12 @@
 //!
 //! A Rust Native Library for Git
 //!
+#[macro_use]
+extern crate num_derive;
+
 mod packfile;
 mod transport;
+mod store;
 
 use crate::packfile::refs::Refs;
 use std::io::Result as IoResult;
@@ -80,6 +84,8 @@ impl Repo {
     /// use rs_git_lib::Repo;
     /// let repo = Repo::clone_from("https://github.com/lnds/rs-git-lib.git", None).unwrap();
     /// assert!(repo.count_objects() > 1);
+    /// let repo = Repo::clone_from("https://github.com/lnds/redondeo.git", None).unwrap();
+    /// assert_eq!(repo.count_objects(), 25);
     /// ```
     pub fn count_objects(self) -> usize {
         self.count_objects
