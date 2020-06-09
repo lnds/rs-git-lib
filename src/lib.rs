@@ -8,6 +8,7 @@ extern crate num_derive;
 mod packfile;
 mod transport;
 mod store;
+mod utils;
 
 use crate::packfile::refs::Refs;
 use std::io::Result as IoResult;
@@ -46,8 +47,8 @@ impl Repo {
         let mut transport = Transport::from_url(url, dir)?;
         let dir = transport.dir();
         let refs = transport.discover_refs()?;
-        let packfile_parser = transport.fetch_packfile(&refs)?;
-
+        let mut packfile_parser = transport.fetch_packfile(&refs)?;
+        let packfile = packfile_parser.parse(Some(&dir))?;
         Ok(Repo { dir, refs, count_objects: packfile_parser.count_objects() })
     }
 
@@ -84,7 +85,7 @@ impl Repo {
     /// use rs_git_lib::Repo;
     /// let repo = Repo::clone_from("https://github.com/lnds/rs-git-lib.git", None).unwrap();
     /// assert!(repo.count_objects() > 1);
-    /// let repo = Repo::clone_from("https://github.com/lnds/redondeo.git", None).unwrap();
+    /// let repo = Repo::clone_from("https://github.com/lnds/redondeo.git", Some("/tmp/redondeo".to_string())).unwrap();
     /// assert_eq!(repo.count_objects(), 25);
     /// ```
     pub fn count_objects(self) -> usize {

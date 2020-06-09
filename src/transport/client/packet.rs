@@ -1,7 +1,7 @@
 use crate::packfile::refs::{Ref, Refs};
-use crate::packfile::PackFileParser;
 use std::collections::HashMap;
 use std::io::{Error, ErrorKind, Read, Result as IOResult};
+use crate::packfile::packfile_parser::PackFileParser;
 
 pub(crate) const GIT_UPLOAD_PACK_HEADER: &[u8; 26] = b"# service=git-upload-pack\n";
 pub(crate) const GIT_FLUSH_HEADER: &[u8; 4] = b"0000";
@@ -122,8 +122,6 @@ pub(crate) fn receive_packet_file_with_sideband<R: Read>(
             parser.add_line(&line)?;
         }
     }
-    while !parser.eof() {
-        parser.parse()?;
-    }
+    parser.process_pending_lines()?;
     Ok(parser)
 }
