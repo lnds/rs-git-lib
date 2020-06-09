@@ -49,6 +49,7 @@ impl Repo {
         let refs = transport.discover_refs()?;
         let mut packfile_parser = transport.fetch_packfile(&refs)?;
         let packfile = packfile_parser.parse(Some(&dir))?;
+        packfile.write(&dir)?;
         Ok(Repo { dir, refs, count_objects: packfile_parser.count_objects() })
     }
 
