@@ -10,7 +10,7 @@ mod transport;
 mod store;
 mod utils;
 
-use crate::packfile::refs::Refs;
+use crate::packfile::refs::{Refs, create_refs};
 use std::io::Result as IoResult;
 use transport::Transport;
 
@@ -50,6 +50,8 @@ impl Repo {
         let mut packfile_parser = transport.fetch_packfile(&refs)?;
         let packfile = packfile_parser.parse(Some(&dir))?;
         packfile.write(&dir)?;
+        create_refs(&dir, &refs);
+        //update_head(&dir, &refs);
         Ok(Repo { dir, refs, count_objects: packfile_parser.count_objects() })
     }
 
