@@ -1,11 +1,15 @@
-use std::cell::RefCell;
-use std::fs::File;
+use crate::delta;
+use crate::store::commit::Commit;
+use crate::store::tree::Tree;
+use crate::utils::sha1_hash_hex;
+use flate2::read::ZlibDecoder;
 use flate2::write::ZlibEncoder;
 use flate2::Compression;
+use std::cell::RefCell;
 use std::fs;
-use std::io::{Read, Write, Result as IOResult};
+use std::fs::File;
+use std::io::{Read, Result as IOResult, Write};
 use std::path::PathBuf;
-use crate::utils::sha1_hash_hex;
 
 #[derive(Debug, Copy, Clone, FromPrimitive)]
 pub enum GitObjectType {
@@ -22,8 +26,6 @@ pub struct GitObject {
     sha: RefCell<Option<String>>,
 }
 
-
-
 impl GitObject {
     pub fn new(object_type: GitObjectType, content: Vec<u8>) -> Self {
         GitObject {
@@ -31,6 +33,48 @@ impl GitObject {
             content,
             sha: RefCell::new(None),
         }
+    }
+
+    pub fn patch(&self, patch: &[u8]) -> Self {
+        GitObject {
+            object_type: self.object_type,
+            content: delta::patch(&self.content, &patch),
+            sha: RefCell::new(None),
+        }
+    }
+
+    ///
+    /// Opens the given object from loose form in the repo.
+    ///
+    pub fn open(repo: &str, sha1: &str) -> IOResult<Self> {
+        println!("open (repo={}, sha1={})", repo, sha1);
+        let path = object_path(repo, sha1);
+        println!("file = {:?}", path);
+        let mut inflated = Vec::new();
+        let file = File::open(path)?;
+        let mut z = ZlibDecoder::new(file);
+        z.read_to_end(&mut inflated)?;
+           // .expect("Error inflating object");
+
+        let sha1_checksum = sha1_hash_hex(&inflated);
+        assert_eq!(sha1_checksum, sha1);
+
+        let split_idx = inflated.iter().position(|x| *x == 0).unwrap();
+        let (object_type, size) = {
+            let header = std::str::from_utf8(&inflated[..split_idx]).unwrap();
+            GitObject::parse_header(header)
+        };
+
+        let mut footer = Vec::new();
+        footer.extend_from_slice(&inflated[split_idx + 1..]);
+
+        assert_eq!(footer.len(), size);
+
+        Ok(GitObject {
+            object_type,
+            content: footer,
+            sha: RefCell::new(Some(sha1.to_owned())),
+        })
     }
 
     #[allow(unused)]
@@ -83,8 +127,50 @@ impl GitObject {
         let res: String = [str_type, " ", &str_size[..], "\0"].concat();
         res.into_bytes()
     }
-}
 
+    fn parse_header(header: &str) -> (GitObjectType, usize) {
+        let split: Vec<&str> = header.split(' ').collect();
+        if split.len() == 2 {
+            let (t, s) = (split[0], split[1]);
+            let obj_type = match t {
+                "commit" => GitObjectType::Commit,
+                "tree" => GitObjectType::Tree,
+                "blob" => GitObjectType::Blob,
+                "tag" => GitObjectType::Tag,
+                _ => panic!("unknown object type"),
+            };
+            let size = s.parse::<usize>().unwrap();
+
+            (obj_type, size)
+        } else {
+            panic!("Bad object header")
+        }
+    }
+
+    ///
+    /// Parses the internal representation of this object into a Commit.
+    /// Returns `None` if the object is not a Commit.
+    ///
+    pub fn as_commit(&self) -> Option<Commit> {
+        if let GitObjectType::Commit = self.object_type {
+            Commit::from_raw(&self)
+        } else {
+            None
+        }
+    }
+
+    ///
+    /// Parses the internal representation of this object into a Tree.
+    /// Returns `None` if the object is not a Tree.
+    ///
+    pub fn as_tree(&self) -> Option<Tree> {
+        if let GitObjectType::Tree = self.object_type {
+            Tree::parse(&self.content)
+        } else {
+            None
+        }
+    }
+}
 
 fn object_path(repo: &str, sha: &str) -> PathBuf {
     let mut path = PathBuf::new();

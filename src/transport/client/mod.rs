@@ -5,9 +5,9 @@ pub(crate) mod local_client;
 pub(crate) mod packet;
 pub(crate) mod ssh_client;
 
+use crate::packfile::packfile_parser::PackFileParser;
 use crate::packfile::refs::{Ref, Refs};
 use std::io::Result as IOResult;
-use crate::packfile::packfile_parser::PackFileParser;
 
 pub trait Protocol {
     fn discover_refs(&mut self) -> IOResult<Refs>;

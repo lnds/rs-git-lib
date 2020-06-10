@@ -6,9 +6,9 @@ use super::packet::{
     create_packfile_negotiation_request, parse_refs_lines, read_flush_packet, read_packet_line,
     receive_packet, receive_packet_file_with_sideband, GIT_FLUSH_HEADER, GIT_UPLOAD_PACK_HEADER,
 };
+use crate::packfile::packfile_parser::PackFileParser;
 use crate::packfile::refs::{Ref, Refs};
 use crate::transport::client::Protocol;
-use crate::packfile::packfile_parser::PackFileParser;
 
 type Client = reqwest::blocking::Client;
 

@@ -1,17 +1,18 @@
-use super::{PackObject, PackFile};
-use std::io::{Error, ErrorKind, Read, Result as IOResult};
-use byteorder::{BigEndian, ReadBytesExt};
+use super::{PackFile, PackObject};
+use crate::packfile::index::PackIndex;
 use crate::store::object::{GitObject, GitObjectType};
+use crate::utils::sha1_hash_hex;
+use byteorder::{BigEndian, ReadBytesExt};
 use flate2::{Decompress, FlushDecompress, Status};
 use num_traits::cast::FromPrimitive;
-use crate::packfile::index::PackIndex;
-use crate::utils::sha1_hash_hex;
+use std::io::{Error, ErrorKind, Read, Result as IOResult};
+use crate::packfile::HEADER_LENGTH;
 
 #[derive(Debug, PartialEq)]
 enum ParseState {
     Init,
     ParseEntryHeader(usize),
-    ParseEntryBody(u8, usize, usize),
+    ParseEntryBody(u8, usize, usize, usize),
     ParseCheckSum(usize),
     End,
 }
@@ -44,18 +45,37 @@ impl PackFileParser {
         }
     }
 
-    pub fn parse(&mut self, dir: Option<&str>) -> IOResult<PackFile> {
+    pub fn from_contents(contents: &[u8]) -> Self {
+        PackFileParser {
+            packfile_data: contents.to_vec(),
+            lines: 0,
+            size: contents.len(),
+            version: 0,
+            entries: 0,
+            state: ParseState::Init,
+            checksum: [0; 20],
+            objects: vec![],
+        }
+    }
+
+    pub fn parse(&mut self, dir: Option<&str>, index_opt: Option<PackIndex>) -> IOResult<PackFile> {
         let sha_computed = sha1_hash_hex(&self.checksum);
-        let mut objects = self.objects.iter().filter_map(|o|
-            match o {
+        let objects = self
+            .objects
+            .iter()
+            .filter_map(|o| match o {
                 (s, c, PackObject::Base(obj)) => Some((*s, *c, obj.clone())),
-                _ => None
-            }).collect();
-        let index = PackIndex::from_objects(objects, &sha_computed, dir);
+                _ => None,
+            })
+            .collect();
+        let refs_deltas = self.objects.iter().filter_map(|o|{
+
+        })
+        let index = index_opt.unwrap_or(PackIndex::from_objects(objects, &sha_computed, dir));
         Ok(PackFile {
             version: self.version,
             num_objects: self.entries,
-            encoded_objects: self.packfile_data[..self.packfile_data.len()-20].to_vec(),
+            encoded_objects: self.packfile_data[HEADER_LENGTH..self.packfile_data.len() - 20].to_vec(),
             hexsha: sha_computed,
             index,
         })
@@ -79,14 +99,20 @@ impl PackFileParser {
         Ok(())
     }
 
-    pub(crate) fn process_pending_lines(&mut self) -> IOResult<()>{
+    pub(crate) fn process_pending_lines(&mut self) -> IOResult<()> {
         while !self.eof() {
             self.process_line()?;
         }
+        println!("pack file parse eof");
         Ok(())
     }
 
+    pub(crate) fn slurp(&mut self) -> IOResult<()> {
+        return self.process_pending_lines();
+    }
+
     pub(crate) fn process_line(&mut self) -> IOResult<()> {
+        println!("process_line state = {:?}", self.state);
         return match self.state {
             ParseState::Init => {
                 let mut data: &[u8] = &self.packfile_data[0..12];
@@ -120,51 +146,67 @@ impl PackFileParser {
                 }
                 assert!(type_id > 0 && type_id <= 7);
                 assert_ne!(type_id, 5);
-                self.state = ParseState::ParseEntryBody(type_id, pos, size);
+                self.state = ParseState::ParseEntryBody(type_id, offset, pos, size);
                 Ok(())
             }
-            ParseState::ParseEntryBody(type_id, offset, size) => {
-                if self.size > offset {
-                    let (obj, object_size) = self.parse_object_content(type_id, offset, size)?;
+            ParseState::ParseEntryBody(type_id, offset, pos, size) => {
+                if self.size > pos {
+                    let (obj, consumed) = self.parse_object_content(type_id, pos, size)?;
+                    println!(
+                        "consume = {}, size = {}, type_id={}, pos={}, offset={}",
+                        consumed, size, type_id, pos, offset
+                    );
                     self.add_object(offset, obj);
                     if self.entries == self.objects.len() {
-                        self.state = ParseState::ParseCheckSum(offset + object_size);
+                        self.state = ParseState::ParseCheckSum(pos + consumed);
                     } else {
-                        self.state = ParseState::ParseEntryHeader(offset + object_size);
+                        self.state = ParseState::ParseEntryHeader(pos + consumed);
                     }
                 }
                 Ok(())
             }
-            ParseState::ParseCheckSum(offset) => {
-                let mut data: &[u8] = &self.packfile_data[offset..];
+            ParseState::ParseCheckSum(pos) => {
+                let mut data: &[u8] = &self.packfile_data[pos..];
                 data.read_exact(&mut self.checksum)?;
                 self.state = ParseState::End;
                 Ok(())
             }
-            _ => Ok(())
-        }
-
+            _ => Ok(()),
+        };
     }
 
-    fn parse_object_content(&mut self, type_id: u8, offset: usize, size: usize) -> IOResult<(PackObject, usize)> {
+    fn parse_object_content(
+        &mut self,
+        type_id: u8,
+        pos: usize,
+        size: usize,
+    ) -> IOResult<(PackObject, usize)> {
         let err = &format!("unexpected id: {} for git object", type_id)[..];
         match type_id {
             1 | 2 | 3 | 4 => {
-                let (content, consumed) = self.read_object_content(offset, size)?;
-                let base_type: GitObjectType = GitObjectType::from_u8(type_id).ok_or(Error::new(ErrorKind::Other, err))?;
-                Ok((PackObject::Base(GitObject::new(base_type, content)), consumed))
+                let (content, consumed) = self.read_object_content(pos, size)?;
+                let base_type: GitObjectType =
+                    GitObjectType::from_u8(type_id).ok_or(Error::new(ErrorKind::Other, err))?;
+                Ok((
+                    PackObject::Base(GitObject::new(base_type, content)),
+                    consumed,
+                ))
             }
             6 => {
-                let (ref_offset, consumed1) = self.read_offset(offset)?;
-                let (content, consumed2) = self.read_object_content(offset+consumed1, size)?;
-                Ok((PackObject::OfsDelta(ref_offset, content), consumed1+consumed2))
+                let (ref_offset, consumed1) = self.read_offset(pos)?;
+                println!("ref_offset = {}, consumed1 = {}", ref_offset, consumed1);
+                let (content, consumed2) = self.read_object_content(pos + consumed1, size)?;
+                Ok((
+                    PackObject::OfsDelta(ref_offset, content),
+                    consumed1 + consumed2,
+                ))
             }
             7 => {
                 let mut base: [u8; 20] = [0; 20];
-                let mut data: &[u8] = &self.packfile_data[offset..];
+                let mut data: &[u8] = &self.packfile_data[pos..];
                 data.read_exact(&mut base)?;
-                let (content, consumed) = self.read_object_content(offset+20, size)?;
-                Ok((PackObject::RefDelta(base, content), consumed+20))
+                let (content, consumed) = self.read_object_content(pos + 20, size)?;
+                Ok((PackObject::RefDelta(base, content), consumed + 20))
             }
             _ => {
                 let err = &format!("unexpected id: {} for git object", type_id)[..];
@@ -177,7 +219,7 @@ impl PackFileParser {
         let mut data: &[u8] = &self.packfile_data[pos..];
         let mut c = data.read_u8()?;
         let mut offset = (c & 0x7f) as usize;
-        let mut consumed = pos+1;
+        let mut consumed = 1;
         while c & 0x80 != 0 {
             c = data.read_u8()?;
             consumed += 1;
@@ -205,17 +247,25 @@ impl PackFileParser {
             match res {
                 Ok(Status::StreamEnd) => {
                     if decompressor.total_out() as usize != size {
-                        return Err(Error::new(ErrorKind::Other, "Size does not match for expected object contents"));
+                        return Err(Error::new(
+                            ErrorKind::Other,
+                            "Size does not match for expected object contents",
+                        ));
                     }
 
                     return Ok((object_buffer, consumed));
                 }
-                Ok(Status::BufError) => return Err(Error::new(ErrorKind::Other, "Encountered zlib buffer error")),
+                Ok(Status::BufError) => {
+                    return Err(Error::new(
+                        ErrorKind::Other,
+                        "Encountered zlib buffer error",
+                    ))
+                }
                 Ok(Status::Ok) => (),
                 Err(e) => {
                     let s = &format!("Encountered zlib decompression error: {}", e)[..];
-                    return Err(Error::new(ErrorKind::Other, s))
-                },
+                    return Err(Error::new(ErrorKind::Other, s));
+                }
             }
         }
     }
@@ -233,6 +283,7 @@ impl PackFileParser {
     }
 
     fn add_object(&mut self, offset: usize, object: PackObject) {
+        println!("add_object(offset={}, object_count={})", offset, self.objects.len());
         self.objects.push((offset, object.crc32(), object));
     }
 

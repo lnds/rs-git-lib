@@ -1,6 +1,7 @@
 pub mod client;
 mod url_parser;
 
+use crate::packfile::packfile_parser::PackFileParser;
 use crate::packfile::refs::{Ref, Refs};
 use client::file_client::FileProtocol;
 use client::git_client::GitProtocol;
@@ -10,7 +11,6 @@ use client::ssh_client::SshProtocol;
 use client::Protocol;
 use std::io::Result as IOResult;
 use url_parser::UrlType::{FILE, GIT, HTTP, LOCAL, SSH};
-use crate::packfile::packfile_parser::PackFileParser;
 
 pub struct Transport {
     client: Box<dyn Protocol>,

@@ -18,3 +18,7 @@ pub fn sha1_hash(input: &[u8]) -> Vec<u8> {
     hasher.result(&mut buf);
     buf
 }
+
+pub fn is_sha(id: &str) -> bool {
+    id.len() == 40 && id.chars().all(|c| c.is_digit(16))
+}

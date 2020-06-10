@@ -1,7 +1,7 @@
+use crate::packfile::packfile_parser::PackFileParser;
 use crate::packfile::refs::{Ref, Refs};
 use std::collections::HashMap;
 use std::io::{Error, ErrorKind, Read, Result as IOResult};
-use crate::packfile::packfile_parser::PackFileParser;
 
 pub(crate) const GIT_UPLOAD_PACK_HEADER: &[u8; 26] = b"# service=git-upload-pack\n";
 pub(crate) const GIT_FLUSH_HEADER: &[u8; 4] = b"0000";

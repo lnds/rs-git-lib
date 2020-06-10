@@ -21,4 +21,6 @@ num-derive = "0.3"
 crc = "1.8.1"
 rust-crypto = "0.2.36"
 rustc-serialize = "0.3.16"
+chrono = "0.4.11"
+nom = "5.1.1"
 
