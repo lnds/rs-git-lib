@@ -158,7 +158,7 @@ impl PackFile {
     }
 
     fn read_at_offset(&self, offset: usize) -> IOResult<PackObject> {
-        let total_offset = offset - HEADER_LENGTH ;
+        let total_offset = offset - HEADER_LENGTH;
         let contents = &self.encoded_objects[total_offset..];
         println!("read_at_offset, total_offset = {}", total_offset);
         let mut reader = ObjectReader::new(contents);

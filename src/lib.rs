@@ -75,7 +75,7 @@ impl Repo {
             count_objects: packfile_parser.count_objects(),
             pack: Some(packfile),
         };
-        repo.checkout_head();
+        repo.checkout_head()?;
         Ok(repo)
     }
 

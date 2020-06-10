@@ -54,7 +54,7 @@ impl GitObject {
         let file = File::open(path)?;
         let mut z = ZlibDecoder::new(file);
         z.read_to_end(&mut inflated)?;
-           // .expect("Error inflating object");
+        // .expect("Error inflating object");
 
         let sha1_checksum = sha1_hash_hex(&inflated);
         assert_eq!(sha1_checksum, sha1);

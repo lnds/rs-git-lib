@@ -1,12 +1,14 @@
 use super::{PackFile, PackObject};
 use crate::packfile::index::PackIndex;
+use crate::packfile::HEADER_LENGTH;
 use crate::store::object::{GitObject, GitObjectType};
 use crate::utils::sha1_hash_hex;
 use byteorder::{BigEndian, ReadBytesExt};
 use flate2::{Decompress, FlushDecompress, Status};
+use nom::lib::std::collections::HashMap;
 use num_traits::cast::FromPrimitive;
+use rustc_serialize::hex::ToHex;
 use std::io::{Error, ErrorKind, Read, Result as IOResult};
-use crate::packfile::HEADER_LENGTH;
 
 #[derive(Debug, PartialEq)]
 enum ParseState {
@@ -60,22 +62,68 @@ impl PackFileParser {
 
     pub fn parse(&mut self, dir: Option<&str>, index_opt: Option<PackIndex>) -> IOResult<PackFile> {
         let sha_computed = sha1_hash_hex(&self.checksum);
-        let objects = self
+        let mut base_objects: HashMap<String, GitObject> = HashMap::new();
+        let mut base_offsets: HashMap<usize, String> = HashMap::new();
+        let mut objects: Vec<(usize, u32, GitObject)> = self
             .objects
             .iter()
             .filter_map(|o| match o {
-                (s, c, PackObject::Base(obj)) => Some((*s, *c, obj.clone())),
+                (offset, checksum, PackObject::Base(obj)) => {
+                    let sha = obj.sha();
+                    base_offsets.insert(*offset, sha.clone());
+                    base_objects.insert(sha, obj.clone());
+                    Some((*offset, *checksum, obj.clone()))
+                }
                 _ => None,
             })
             .collect();
-        let refs_deltas = self.objects.iter().filter_map(|o|{
+        let mut refs_deltas: Vec<(usize, u32, GitObject)> = self
+            .objects
+            .iter()
+            .filter_map(|o| match o {
+                (offset, checksum, PackObject::RefDelta(base, patch)) => {
+                    let patched = {
+                        let sha = base.to_hex();
+                        let base_object = base_objects.get(&sha).unwrap();
+                        base_object.patch(patch)
+                    };
+                    let sha = patched.sha();
+                    base_offsets.insert(*offset, sha.clone());
+                    base_objects.insert(sha, patched.clone());
+                    Some((*offset, *checksum, patched))
+                }
+                _ => None,
+            })
+            .collect();
+        let mut ofs_deltas: Vec<(usize, u32, GitObject)> = self
+            .objects
+            .iter()
+            .filter_map(|o| match o {
+                (offset, checksum, PackObject::OfsDelta(base, patch)) => {
+                    let patched = {
+                        let base = *offset - *base;
+                        let base_sha = base_offsets.get(&base).unwrap();
+                        let base_object = base_objects.get(base_sha).unwrap();
+                        base_object.patch(patch)
+                    };
+                    let sha = patched.sha();
+                    base_offsets.insert(*offset, sha.clone());
+                    base_objects.insert(sha, patched.clone());
+                    Some((*offset, *checksum, patched))
+                }
+                _ => None,
+            })
+            .collect();
 
-        })
+        objects.append(&mut refs_deltas);
+        objects.append(&mut ofs_deltas);
+
         let index = index_opt.unwrap_or(PackIndex::from_objects(objects, &sha_computed, dir));
         Ok(PackFile {
             version: self.version,
             num_objects: self.entries,
-            encoded_objects: self.packfile_data[HEADER_LENGTH..self.packfile_data.len() - 20].to_vec(),
+            encoded_objects: self.packfile_data[HEADER_LENGTH..self.packfile_data.len() - 20]
+                .to_vec(),
             hexsha: sha_computed,
             index,
         })
@@ -283,7 +331,11 @@ impl PackFileParser {
     }
 
     fn add_object(&mut self, offset: usize, object: PackObject) {
-        println!("add_object(offset={}, object_count={})", offset, self.objects.len());
+        println!(
+            "add_object(offset={}, object_count={})",
+            offset,
+            self.objects.len()
+        );
         self.objects.push((offset, object.crc32(), object));
     }
 
