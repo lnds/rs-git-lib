@@ -118,9 +118,16 @@ impl PackFileParser {
         objects.append(&mut refs_deltas);
         objects.append(&mut ofs_deltas);
 
-        let index = index_opt.unwrap_or(PackIndex::from_objects(&mut objects, &sha_computed, dir));
-        let offset_objects = objects.iter().map(|(offset,_,obj)|(*offset, obj.clone())).into_iter().collect();
-        let objects = objects.iter().map(|(_,_,obj)|(obj.sha(), obj.clone())).into_iter().collect();
+        let index =
+            index_opt.unwrap_or_else(|| PackIndex::from_objects(&mut objects, &sha_computed, dir));
+        let offset_objects = objects
+            .iter()
+            .map(|(offset, _, obj)| (*offset, obj.clone()))
+            .collect();
+        let objects = objects
+            .iter()
+            .map(|(_, _, obj)| (obj.sha(), obj.clone()))
+            .collect();
         Ok(PackFile {
             version: self.version,
             num_objects: self.entries,
@@ -159,11 +166,11 @@ impl PackFileParser {
     }
 
     pub(crate) fn slurp(&mut self) -> IOResult<()> {
-        return self.process_pending_lines();
+        self.process_pending_lines()
     }
 
     pub(crate) fn process_line(&mut self) -> IOResult<()> {
-        return match self.state {
+        match self.state {
             ParseState::Init => {
                 let mut data: &[u8] = &self.packfile_data[0..12];
                 let magic = data.read_u32::<BigEndian>()?;
@@ -218,7 +225,7 @@ impl PackFileParser {
                 Ok(())
             }
             _ => Ok(()),
-        };
+        }
     }
 
     fn parse_object_content(
@@ -231,8 +238,8 @@ impl PackFileParser {
         match type_id {
             1 | 2 | 3 | 4 => {
                 let (content, consumed) = self.read_object_content(pos, size)?;
-                let base_type: GitObjectType =
-                    GitObjectType::from_u8(type_id).ok_or(Error::new(ErrorKind::Other, err))?;
+                let base_type: GitObjectType = GitObjectType::from_u8(type_id)
+                    .ok_or_else(|| Error::new(ErrorKind::Other, err))?;
                 Ok((
                     PackObject::Base(GitObject::new(base_type, content)),
                     consumed,

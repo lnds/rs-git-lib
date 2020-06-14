@@ -2,18 +2,16 @@ pub mod index;
 pub mod packfile_parser;
 pub mod refs;
 use crate::packfile::packfile_parser::PackFileParser;
-use crate::store::object::{GitObject, GitObjectType};
+use crate::store::object::GitObject;
 use crate::utils::sha1_hash;
-use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
+use byteorder::{BigEndian, WriteBytesExt};
 use crc::crc32;
-use flate2::{Decompress, FlushDecompress, Status};
 use index::PackIndex;
-use rustc_serialize::hex::{FromHex, ToHex};
+use nom::lib::std::collections::HashMap;
+use std::fs;
 use std::fs::File;
 use std::io::{Read, Result as IOResult, Write};
 use std::path::{Path, PathBuf};
-use std::{cmp, fs};
-use nom::lib::std::collections::HashMap;
 
 pub const MAGIC_HEADER: u32 = 1_346_454_347; // "PACK"
 const HEADER_LENGTH: usize = 12; // Magic + Len + Version
@@ -29,6 +27,7 @@ pub struct PackFile {
 }
 
 impl PackFile {
+    #[allow(dead_code)]
     pub fn open<P: AsRef<Path>>(p: P) -> IOResult<Self> {
         let path = p.as_ref();
         let mut contents = Vec::new();
@@ -88,22 +87,21 @@ impl PackFile {
     }
 
     pub fn find_by_sha(&self, sha: &str) -> IOResult<Option<GitObject>> {
-        if let Some(obj) =self.objects.get(sha) {
-            return Ok(Some(obj.clone()))
+        if let Some(obj) = self.objects.get(sha) {
+            Ok(Some(obj.clone()))
         } else {
             Ok(None)
         }
     }
 
+    #[allow(dead_code)]
     fn find_by_offset(&self, offset: usize) -> IOResult<Option<GitObject>> {
         if let Some(obj) = self.offset_objects.get(&offset) {
             Ok(Some(obj.clone()))
         } else {
             Ok(None)
         }
-
     }
-
 }
 
 #[derive(Debug)]
@@ -114,13 +112,6 @@ pub enum PackObject {
 }
 
 impl PackObject {
-    pub fn unwrap(self) -> GitObject {
-        match self {
-            PackObject::Base(b) => b,
-            _ => panic!("Called `GitObject::unwrap` on a deltified object"),
-        }
-    }
-
     pub fn crc32(&self) -> u32 {
         let content = match *self {
             PackObject::Base(ref b) => &b.content[..][..],
@@ -129,24 +120,7 @@ impl PackObject {
         };
         crc32::checksum_ieee(content)
     }
-
-    pub fn is_base(&self) -> bool {
-        if let PackObject::Base(_) = *self {
-            true
-        } else {
-            false
-        }
-    }
-
-    pub fn patch(&self, delta: &[u8]) -> Option<Self> {
-        if let PackObject::Base(ref b) = *self {
-            Some(PackObject::Base(b.patch(delta)))
-        } else {
-            None
-        }
-    }
 }
-
 
 #[cfg(test)]
 mod tests {

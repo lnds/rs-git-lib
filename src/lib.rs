@@ -23,7 +23,7 @@ use byteorder::{BigEndian, WriteBytesExt};
 use rustc_serialize::hex::FromHex;
 use std::fs;
 use std::fs::{File, Permissions};
-use std::io::{Result as IOResult, Write, Error, ErrorKind};
+use std::io::{Error, ErrorKind, Result as IOResult, Write};
 use std::iter::FromIterator;
 use std::os::unix::fs::MetadataExt;
 use std::os::unix::fs::PermissionsExt;
@@ -179,12 +179,14 @@ impl Repo {
 
     pub fn read_object(&self, sha: &str) -> IOResult<GitObject> {
         // Attempt to read from disk first
-        let result = GitObject::open(&self.dir, sha).or_else(|_| {
+        GitObject::open(&self.dir, sha).or_else(|_| {
             // If this isn't there, read from the packfile
-            let pack = self.pack.as_ref().unwrap();
+            let pack = self
+                .pack
+                .as_ref()
+                .ok_or_else(|| Error::new(ErrorKind::Other, "can't read pack object"))?;
             pack.find_by_sha(sha).map(|o| o.unwrap())
-        });
-        result
+        })
     }
 
     fn extract_tree(&self, commit: &Commit) -> Option<Tree> {
@@ -317,7 +319,9 @@ fn get_index_entry(
     // We need to remove the repo path from the path we save on the index entry
     // FIXME: This doesn't need to be a path since we just discard it again
     let relative_path = PathBuf::from(path.trim_start_matches(root).trim_start_matches('/'));
-    let decoded_sha = sha.from_hex().map_err(|e| Error::new(ErrorKind::Other, "can't decode sha"))?;
+    let decoded_sha = sha
+        .from_hex()
+        .map_err(|_| Error::new(ErrorKind::Other, "can't decode sha"))?;
 
     Ok(IndexEntry {
         ctime: meta.ctime(),
