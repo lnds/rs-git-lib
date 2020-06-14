@@ -23,7 +23,7 @@ use byteorder::{BigEndian, WriteBytesExt};
 use rustc_serialize::hex::FromHex;
 use std::fs;
 use std::fs::{File, Permissions};
-use std::io::{Result as IOResult, Write};
+use std::io::{Result as IOResult, Write, Error, ErrorKind};
 use std::iter::FromIterator;
 use std::os::unix::fs::MetadataExt;
 use std::os::unix::fs::PermissionsExt;
@@ -317,8 +317,7 @@ fn get_index_entry(
     // We need to remove the repo path from the path we save on the index entry
     // FIXME: This doesn't need to be a path since we just discard it again
     let relative_path = PathBuf::from(path.trim_start_matches(root).trim_start_matches('/'));
-    // FIXME: This error is not handled.
-    let decoded_sha = sha.from_hex().unwrap();
+    let decoded_sha = sha.from_hex().map_err(|e| Error::new(ErrorKind::Other, "can't decode sha"))?;
 
     Ok(IndexEntry {
         ctime: meta.ctime(),
