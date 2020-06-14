@@ -47,9 +47,7 @@ impl GitObject {
     /// Opens the given object from loose form in the repo.
     ///
     pub fn open(repo: &str, sha1: &str) -> IOResult<Self> {
-        println!("open (repo={}, sha1={})", repo, sha1);
         let path = object_path(repo, sha1);
-        println!("file = {:?}", path);
         let mut inflated = Vec::new();
         let file = File::open(path)?;
         let mut z = ZlibDecoder::new(file);

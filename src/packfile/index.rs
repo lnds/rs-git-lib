@@ -113,7 +113,6 @@ impl PackIndex {
         let mut shas = vec![[0; 20]; size];
         let mut checksums: Vec<u32> = vec![0; size];
 
-        println!("INDEX FROM OBJECTS (size={})", objects.len());
         // Sort the objects by SHA
         objects.sort_by(|&(_, _, ref oa), &(_, _, ref ob)| oa.sha().cmp(&ob.sha()));
 
@@ -150,24 +149,13 @@ impl PackIndex {
     ///
     #[allow(dead_code)]
     pub fn find(&self, sha: &[u8]) -> Option<usize> {
-        println!("index find {:?}", sha);
         let fan = sha[0] as usize;
-        println!("fan = {}", fan);
         let start = if fan > 0 {
             self.fanout[fan - 1] as usize
         } else {
             0
         };
-        print!("[");
-        for i in self.fanout.iter() {
-            print!("{} ", i)
-        }
-        println!("]");
         let end = self.fanout[fan] as usize;
-        println!("start = {}, end = {}", start, end);
-        for (i, s) in self.shas.iter().enumerate() {
-            println!("sha[{}] = {}", i, s.to_hex());
-        }
         self.shas[start..=end]
             .binary_search_by(|ref s| s[..].cmp(sha))
             .and_then(|i| Ok(self.offsets[i + start] as usize))
@@ -238,9 +226,7 @@ mod tests {
         // The packfile index when encoded should exactly
         // match the one which was read when the Packfile::open
         // call was made.
-        println!("createing an index");
         let pack = PackFile::open(PACK_FILE).unwrap();
-        println!("pack file read");
 
         let index = {
             let mut bytes = Vec::new();

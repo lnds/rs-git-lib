@@ -151,7 +151,6 @@ impl PackFileParser {
         while !self.eof() {
             self.process_line()?;
         }
-        println!("pack file parse eof");
         Ok(())
     }
 
@@ -160,7 +159,6 @@ impl PackFileParser {
     }
 
     pub(crate) fn process_line(&mut self) -> IOResult<()> {
-        println!("process_line state = {:?}", self.state);
         return match self.state {
             ParseState::Init => {
                 let mut data: &[u8] = &self.packfile_data[0..12];
@@ -200,10 +198,6 @@ impl PackFileParser {
             ParseState::ParseEntryBody(type_id, offset, pos, size) => {
                 if self.size > pos {
                     let (obj, consumed) = self.parse_object_content(type_id, pos, size)?;
-                    println!(
-                        "consume = {}, size = {}, type_id={}, pos={}, offset={}",
-                        consumed, size, type_id, pos, offset
-                    );
                     self.add_object(offset, obj);
                     if self.entries == self.objects.len() {
                         self.state = ParseState::ParseCheckSum(pos + consumed);
@@ -242,7 +236,6 @@ impl PackFileParser {
             }
             6 => {
                 let (ref_offset, consumed1) = self.read_offset(pos)?;
-                println!("ref_offset = {}, consumed1 = {}", ref_offset, consumed1);
                 let (content, consumed2) = self.read_object_content(pos + consumed1, size)?;
                 Ok((
                     PackObject::OfsDelta(ref_offset, content),
@@ -331,11 +324,6 @@ impl PackFileParser {
     }
 
     fn add_object(&mut self, offset: usize, object: PackObject) {
-        println!(
-            "add_object(offset={}, object_count={})",
-            offset,
-            self.objects.len()
-        );
         self.objects.push((offset, object.crc32(), object));
     }
 

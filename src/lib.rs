@@ -122,16 +122,13 @@ impl Repo {
     fn checkout_head(&self) -> IOResult<()> {
         let tip = resolve_ref(&self.dir, "HEAD")?;
         let mut idx = Vec::new();
-        println!("idx = vec");
         self.walk(&tip)
             .and_then(|t| self.walk_tree(&self.dir, &t, &mut idx).ok());
-        println!("walked");
         write_index(&self.dir, &mut idx[..])?;
         Ok(())
     }
 
     fn walk(&self, sha: &str) -> Option<Tree> {
-        println!("walk {}", sha);
         self.read_object(sha)
             .ok()
             .and_then(|object| match object.object_type {

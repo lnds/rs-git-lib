@@ -34,7 +34,6 @@ impl PackFile {
 
         let idx_path = path.with_extension("idx");
         let idx = PackIndex::open(idx_path)?;
-        println!("idx read");
         PackFile::parse_with_index(&contents, idx, None)
     }
 
@@ -44,7 +43,6 @@ impl PackFile {
         dir: Option<&str>,
     ) -> IOResult<Self> {
         let mut parser = PackFileParser::from_contents(contents);
-        println!("parser");
         parser.slurp()?;
         parser.parse(dir, idx)
     }
@@ -87,9 +85,7 @@ impl PackFile {
     }
 
     pub fn find_by_sha(&self, sha: &str) -> IOResult<Option<GitObject>> {
-        println!("find by sha {}", sha);
         let off = sha.from_hex().ok().and_then(|s| self.index.find(&s));
-        println!("off = {:?}", off);
         match off {
             Some(offset) => self.find_by_offset(offset),
             None => Ok(None),
@@ -105,12 +101,10 @@ impl PackFile {
     }
 
     fn find_by_offset(&self, mut offset: usize) -> IOResult<Option<GitObject>> {
-        println!("find by offset {}", offset);
         // Read the initial offset.
         //
         // If it is a base object, return the enclosing object.
         let mut object = self.read_at_offset(offset)?;
-        println!("object read");
         if let PackObject::Base(base) = object {
             return Ok(Some(base));
         };
@@ -160,9 +154,7 @@ impl PackFile {
     fn read_at_offset(&self, offset: usize) -> IOResult<PackObject> {
         let total_offset = offset - HEADER_LENGTH;
         let contents = &self.encoded_objects[total_offset..];
-        println!("read_at_offset, total_offset = {}", total_offset);
         let mut reader = ObjectReader::new(contents);
-        println!("reader!");
         reader.read_object()
     }
 }
