@@ -24,7 +24,7 @@ pub struct Commit<'a> {
 
 impl<'a> Commit<'a> {
     pub fn from_raw(obj: &'a GitObject) -> Option<Self> {
-        parse_commit_inner(&obj.content).ok().map(|(_, raw_parts)|{
+        parse_commit_inner(&obj.content).ok().map(|(_, raw_parts)| {
             let (tree, parents, author, committer, message) = raw_parts;
             Commit {
                 tree,

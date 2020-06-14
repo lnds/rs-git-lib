@@ -8,7 +8,7 @@ use flate2::Compression;
 use std::cell::RefCell;
 use std::fs;
 use std::fs::File;
-use std::io::{Read, Result as IOResult, Write, Error, ErrorKind};
+use std::io::{Error, ErrorKind, Read, Result as IOResult, Write};
 use std::path::PathBuf;
 
 #[derive(Debug, Copy, Clone, FromPrimitive)]
@@ -35,12 +35,12 @@ impl GitObject {
         }
     }
 
-    pub fn patch(&self, patch: &[u8]) -> Self {
-        GitObject {
+    pub fn patch(&self, patch: &[u8]) -> IOResult<Self> {
+        Ok(GitObject {
             object_type: self.object_type,
-            content: delta::patch(&self.content, &patch),
+            content: delta::patch(&self.content, &patch)?,
             sha: RefCell::new(None),
-        }
+        })
     }
 
     ///
@@ -83,7 +83,10 @@ impl GitObject {
         let (sha1, blob) = self.encode();
         let path = object_path(repo, &sha1);
 
-        fs::create_dir_all(path.parent().unwrap())?;
+        fs::create_dir_all(
+            path.parent()
+                .ok_or_else(|| Error::new(ErrorKind::Other, "no path to write"))?,
+        )?;
 
         let file = File::create(&path)?;
         let mut z = ZlibEncoder::new(file, Compression::default());

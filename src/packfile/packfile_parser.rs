@@ -85,7 +85,7 @@ impl PackFileParser {
                     let patched = {
                         let sha = base.to_hex();
                         let base_object = base_objects.get(&sha).unwrap();
-                        base_object.patch(patch)
+                        base_object.patch(patch).ok()?
                     };
                     let sha = patched.sha();
                     base_offsets.insert(*offset, sha.clone());
@@ -104,7 +104,7 @@ impl PackFileParser {
                         let base = *offset - *base;
                         let base_sha = base_offsets.get(&base).unwrap();
                         let base_object = base_objects.get(base_sha).unwrap();
-                        base_object.patch(patch)
+                        base_object.patch(patch).ok()?
                     };
                     let sha = patched.sha();
                     base_offsets.insert(*offset, sha.clone());
@@ -118,8 +118,7 @@ impl PackFileParser {
         objects.append(&mut refs_deltas);
         objects.append(&mut ofs_deltas);
 
-        let index =
-            index_opt.unwrap_or_else(|| PackIndex::from_objects(&mut objects, &sha_computed, dir));
+        let index = index_opt.unwrap_or(PackIndex::from_objects(&mut objects, &sha_computed, dir)?);
         let offset_objects = objects
             .iter()
             .map(|(offset, _, obj)| (*offset, obj.clone()))

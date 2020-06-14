@@ -27,7 +27,9 @@ pub enum EntryMode {
 
 impl Tree {
     pub fn parse(content: &[u8]) -> Option<Self> {
-        parse_tree_entries(content).ok().map(|(_,entries)| Tree {entries})
+        parse_tree_entries(content)
+            .ok()
+            .map(|(_, entries)| Tree { entries })
     }
 }
 

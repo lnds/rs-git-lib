@@ -3,7 +3,7 @@ use crate::utils::{sha1_hash, sha1_hash_hex};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use rustc_serialize::hex::{FromHex, ToHex};
 use std::fs::File;
-use std::io::{Read, Result as IOResult, Write};
+use std::io::{Error, ErrorKind, Read, Result as IOResult, Write};
 use std::path::Path;
 
 type SHA = [u8; 20];
@@ -106,7 +106,7 @@ impl PackIndex {
         objects: &mut Vec<(usize, u32, GitObject)>,
         pack_sha: &str,
         dir: Option<&str>,
-    ) -> Self {
+    ) -> IOResult<Self> {
         let size = objects.len();
         let mut fanout = [0u32; 256];
         let mut offsets = vec![0; size];
@@ -118,7 +118,7 @@ impl PackIndex {
 
         for (i, &(offset, crc, ref obj)) in objects.iter().enumerate() {
             if let Some(path) = dir {
-                let _ = obj.write(path);
+                obj.write(path)?;
             }
             let mut sha = [0u8; 20];
             let vsha = &obj.sha().from_hex().unwrap();
@@ -134,14 +134,16 @@ impl PackIndex {
             offsets[i] = offset as u32;
             checksums[i] = crc;
         }
-        assert_eq!(size as u32, fanout[255]);
-        PackIndex {
+        if size as u32 != fanout[255] {
+            return Err(Error::new(ErrorKind::Other, "bad fanout size"));
+        }
+        Ok(PackIndex {
             fanout,
             offsets,
             shas,
             checksums,
             pack_sha: pack_sha.to_string(),
-        }
+        })
     }
 
     ///

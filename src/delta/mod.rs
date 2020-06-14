@@ -1,7 +1,8 @@
 use byteorder::ReadBytesExt;
+use std::io::Result as IOResult;
 
-pub fn patch(source: &[u8], delta: &[u8]) -> Vec<u8> {
-    let mut patcher = DeltaPatcher::new(source, delta);
+pub fn patch(source: &[u8], delta: &[u8]) -> IOResult<Vec<u8>> {
+    let mut patcher = DeltaPatcher::new(source, delta)?;
     patcher.run_to_end()
 }
 
@@ -13,27 +14,27 @@ struct DeltaHeader {
 }
 
 impl DeltaHeader {
-    fn new(delta: &mut &[u8]) -> DeltaHeader {
-        let (source, bytes_s) = DeltaHeader::decode_size(delta);
-        let (target, bytes_t) = DeltaHeader::decode_size(delta);
+    fn new(delta: &mut &[u8]) -> IOResult<DeltaHeader> {
+        let (source, bytes_s) = DeltaHeader::decode_size(delta)?;
+        let (target, bytes_t) = DeltaHeader::decode_size(delta)?;
 
-        DeltaHeader {
+        Ok(DeltaHeader {
             source_len: source,
             target_len: target,
             get_offset: bytes_s + bytes_t,
-        }
+        })
     }
 
-    fn decode_size(delta: &mut &[u8]) -> (usize, usize) {
+    fn decode_size(delta: &mut &[u8]) -> IOResult<(usize, usize)> {
         let mut byte = 0x80;
         let mut size = 0;
         let mut count = 0;
         while (byte & 0x80) > 0 {
-            byte = delta.read_u8().unwrap() as usize;
+            byte = delta.read_u8()? as usize;
             size += (byte & 127) << (7 * count);
             count += 1;
         }
-        (size, count)
+        Ok((size, count))
     }
 }
 
@@ -50,18 +51,18 @@ struct DeltaPatcher<'a> {
 }
 
 impl<'a> DeltaPatcher<'a> {
-    pub fn new(source: &'a [u8], mut delta: &'a [u8]) -> Self {
-        let header = DeltaHeader::new(&mut delta);
+    pub fn new(source: &'a [u8], mut delta: &'a [u8]) -> IOResult<Self> {
+        let header = DeltaHeader::new(&mut delta)?;
         assert_eq!(header.source_len, source.len());
 
-        DeltaPatcher {
+        Ok(DeltaPatcher {
             source,
             delta,
             target_len: header.target_len,
-        }
+        })
     }
 
-    fn run_to_end(&mut self) -> Vec<u8> {
+    fn run_to_end(&mut self) -> IOResult<Vec<u8>> {
         let target_len = self.target_len;
         let mut buf = Vec::with_capacity(target_len);
 
@@ -69,7 +70,7 @@ impl<'a> DeltaPatcher<'a> {
             self.run_command(command, &mut buf);
         }
         assert_eq!(buf.len(), target_len);
-        buf
+        Ok(buf)
     }
 
     fn read_command(&mut self) -> Option<DeltaOp> {
