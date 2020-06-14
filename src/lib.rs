@@ -49,12 +49,6 @@ impl Repo {
     /// # Examples
     ///
     /// ```
-    /// // will write the repo on rs-git-lib directory
-    /// use rs_git_lib::Repo;
-    /// let repo = Repo::clone_from("https://github.com/lnds/rs-git-lib.git", None);
-    /// ```
-    ///
-    /// ```
     /// // will write the repo on /tmp/rs-git directory
     /// use rs_git_lib::Repo;
     /// let repo = Repo::clone_from("https://github.com/lnds/rs-git-lib.git", Some("/tmp/rs-git".to_string()));
@@ -84,7 +78,7 @@ impl Repo {
     ///
     /// ```
     /// use rs_git_lib::Repo;
-    /// let repo = Repo::clone_from("https://github.com/lnds/rs-git-lib.git", None);
+    /// let repo = Repo::clone_from("https://github.com/lnds/rs-git-lib.git", Some("/tmp/rs-git".to_string()));
     /// let refs = repo.unwrap().refs();
     /// assert_eq!(refs[0].name, "HEAD");
     /// assert_eq!(refs[1].name, "refs/heads/master");
@@ -98,8 +92,8 @@ impl Repo {
     ///
     /// ```
     /// use rs_git_lib::Repo;
-    /// let repo = Repo::clone_from("https://github.com/lnds/rs-git-lib.git", None).unwrap();
-    /// assert_eq!(repo.dir(), "rs-git-lib");
+    /// let repo = Repo::clone_from("https://github.com/lnds/rs-git-lib.git", Some("/tmp/rs-git".to_string())).unwrap();
+    /// assert_eq!(repo.dir(), "/tmp/rs-git");
     /// ```
     pub fn dir(self) -> String {
         self.dir
@@ -110,7 +104,7 @@ impl Repo {
     ///
     /// ```
     /// use rs_git_lib::Repo;
-    /// let repo = Repo::clone_from("https://github.com/lnds/rs-git-lib.git", None).unwrap();
+    /// let repo = Repo::clone_from("https://github.com/lnds/rs-git-lib.git", Some("/tmp/rs-git".to_string())).unwrap();
     /// assert!(repo.count_objects() > 1);
     /// let repo = Repo::clone_from("https://github.com/lnds/redondeo.git", Some("/tmp/redondeo".to_string())).unwrap();
     /// assert_eq!(repo.count_objects(), 25);
