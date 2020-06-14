@@ -8,7 +8,7 @@ use flate2::Compression;
 use std::cell::RefCell;
 use std::fs;
 use std::fs::File;
-use std::io::{Read, Result as IOResult, Write};
+use std::io::{Read, Result as IOResult, Write, Error, ErrorKind};
 use std::path::PathBuf;
 
 #[derive(Debug, Copy, Clone, FromPrimitive)]
@@ -52,10 +52,11 @@ impl GitObject {
         let file = File::open(path)?;
         let mut z = ZlibDecoder::new(file);
         z.read_to_end(&mut inflated)?;
-        // .expect("Error inflating object");
 
         let sha1_checksum = sha1_hash_hex(&inflated);
-        assert_eq!(sha1_checksum, sha1);
+        if sha1_checksum != sha1 {
+            return Err(Error::new(ErrorKind::Other, "bad checksum"));
+        }
 
         let split_idx = inflated.iter().position(|x| *x == 0).unwrap();
         let (object_type, size) = {
@@ -66,7 +67,9 @@ impl GitObject {
         let mut footer = Vec::new();
         footer.extend_from_slice(&inflated[split_idx + 1..]);
 
-        assert_eq!(footer.len(), size);
+        if footer.len() != size {
+            return Err(Error::new(ErrorKind::Other, "footer len != size"));
+        }
 
         Ok(GitObject {
             object_type,
@@ -84,8 +87,7 @@ impl GitObject {
 
         let file = File::create(&path)?;
         let mut z = ZlibEncoder::new(file, Compression::default());
-        z.write_all(&blob[..])?;
-        Ok(())
+        z.write_all(&blob[..])
     }
 
     ///
@@ -122,7 +124,7 @@ impl GitObject {
             GitObjectType::Tag => "tag",
         };
         let str_size = self.content.len().to_string();
-        let res: String = [str_type, " ", &str_size[..], "\0"].concat();
+        let res = format!("{} {}\0", str_type, &str_size[..]);
         res.into_bytes()
     }
 
