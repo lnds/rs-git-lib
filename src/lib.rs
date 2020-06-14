@@ -190,7 +190,7 @@ impl Repo {
     }
 
     fn extract_tree(&self, commit: &Commit) -> Option<Tree> {
-        let sha = &commit.tree;
+        let sha = commit.tree;
         self.read_tree(sha)
     }
 

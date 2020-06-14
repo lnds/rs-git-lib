@@ -27,11 +27,7 @@ pub enum EntryMode {
 
 impl Tree {
     pub fn parse(content: &[u8]) -> Option<Self> {
-        if let IResult::Ok((_, entries)) = parse_tree_entries(content) {
-            Some(Tree { entries })
-        } else {
-            None
-        }
+        parse_tree_entries(content).ok().map(|(_,entries)| Tree {entries})
     }
 }
 
@@ -44,7 +40,7 @@ impl FromStr for EntryMode {
             "120000" => Ok(EntryMode::Symlink),
             "160000" => Ok(EntryMode::Gitlink),
             "40000" => Ok(EntryMode::SubDirectory),
-            _ => panic!("Unsupported file mode: {}", mode),
+            _ => Err(0),
         }
     }
 }
