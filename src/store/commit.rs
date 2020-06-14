@@ -3,7 +3,6 @@ use chrono::naive::NaiveDateTime;
 use chrono::{DateTime, FixedOffset};
 use nom::character::complete::{digit1, line_ending, newline, space0, space1};
 use nom::combinator::rest;
-use nom::IResult;
 use std::str::from_utf8;
 use std::str::{self, FromStr};
 #[derive(Debug)]
@@ -25,19 +24,17 @@ pub struct Commit<'a> {
 
 impl<'a> Commit<'a> {
     pub fn from_raw(obj: &'a GitObject) -> Option<Self> {
-        if let IResult::Ok((_, raw_parts)) = parse_commit_inner(&obj.content) {
+        parse_commit_inner(&obj.content).ok().map(|(_, raw_parts)|{
             let (tree, parents, author, committer, message) = raw_parts;
-            Some(Commit {
+            Commit {
                 tree,
                 parents,
                 author,
                 committer,
                 message,
                 raw: obj,
-            })
-        } else {
-            None
-        }
+            }
+        })
     }
 }
 
