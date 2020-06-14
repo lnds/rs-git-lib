@@ -184,15 +184,12 @@ impl Repo {
     }
 
     pub fn read_object(&self, sha: &str) -> IOResult<GitObject> {
-        println!("read_object {}", sha);
         // Attempt to read from disk first
         let result = GitObject::open(&self.dir, sha).or_else(|_| {
             // If this isn't there, read from the packfile
-            println!("or_else");
             let pack = self.pack.as_ref().unwrap();
             pack.find_by_sha(sha).map(|o| o.unwrap())
         });
-        println!("result = {:?}", result);
         result
     }
 

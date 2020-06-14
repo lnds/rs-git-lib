@@ -239,7 +239,6 @@ where
             size += ((c & 0x7f) as usize) << shift;
             shift += 7;
         }
-        println!("type_id = {}, size={}", type_id, size);
 
         match type_id {
             1 | 2 | 3 | 4 => {
@@ -418,9 +417,7 @@ mod tests {
     fn reading_delta_objects_should_resolve_them_correctly() {
         use std::str;
         let pack = read_pack();
-        println!("pack read");
         let delta = pack.find_by_sha(DELTA_SHA).unwrap().unwrap();
-        println!("after delta");
         let content = str::from_utf8(&delta.content[..]).unwrap();
         assert_eq!(content, DELTA_CONTENT);
     }
