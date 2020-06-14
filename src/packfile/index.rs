@@ -103,7 +103,7 @@ impl PackIndex {
     }
 
     pub fn from_objects(
-        mut objects: Vec<(usize, u32, GitObject)>,
+        objects: &mut Vec<(usize, u32, GitObject)>,
         pack_sha: &str,
         dir: Option<&str>,
     ) -> Self {

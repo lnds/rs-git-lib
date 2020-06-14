@@ -118,7 +118,9 @@ impl PackFileParser {
         objects.append(&mut refs_deltas);
         objects.append(&mut ofs_deltas);
 
-        let index = index_opt.unwrap_or(PackIndex::from_objects(objects, &sha_computed, dir));
+        let index = index_opt.unwrap_or(PackIndex::from_objects(&mut objects, &sha_computed, dir));
+        let offset_objects = objects.iter().map(|(offset,_,obj)|(*offset, obj.clone())).into_iter().collect();
+        let objects = objects.iter().map(|(_,_,obj)|(obj.sha(), obj.clone())).into_iter().collect();
         Ok(PackFile {
             version: self.version,
             num_objects: self.entries,
@@ -126,6 +128,8 @@ impl PackFileParser {
                 .to_vec(),
             hexsha: sha_computed,
             index,
+            objects,
+            offset_objects,
         })
     }
     pub(crate) fn add_line(&mut self, line: &[u8]) -> IOResult<()> {

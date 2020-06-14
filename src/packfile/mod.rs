@@ -13,6 +13,7 @@ use std::fs::File;
 use std::io::{Read, Result as IOResult, Write};
 use std::path::{Path, PathBuf};
 use std::{cmp, fs};
+use nom::lib::std::collections::HashMap;
 
 pub const MAGIC_HEADER: u32 = 1_346_454_347; // "PACK"
 const HEADER_LENGTH: usize = 12; // Magic + Len + Version
@@ -23,6 +24,8 @@ pub struct PackFile {
     encoded_objects: Vec<u8>,
     hexsha: String,
     pub index: PackIndex,
+    objects: HashMap<String, GitObject>,
+    offset_objects: HashMap<usize, GitObject>,
 }
 
 impl PackFile {
@@ -85,78 +88,22 @@ impl PackFile {
     }
 
     pub fn find_by_sha(&self, sha: &str) -> IOResult<Option<GitObject>> {
-        let off = sha.from_hex().ok().and_then(|s| self.index.find(&s));
-        match off {
-            Some(offset) => self.find_by_offset(offset),
-            None => Ok(None),
+        if let Some(obj) =self.objects.get(sha) {
+            return Ok(Some(obj.clone()))
+        } else {
+            Ok(None)
         }
     }
 
-    fn find_by_sha_unresolved(&self, sha: &str) -> IOResult<Option<PackObject>> {
-        let off = sha.from_hex().ok().and_then(|ref s| self.index.find(s));
-        match off {
-            Some(offset) => Ok(Some(self.read_at_offset(offset)?)),
-            None => Ok(None),
+    fn find_by_offset(&self, offset: usize) -> IOResult<Option<GitObject>> {
+        if let Some(obj) = self.offset_objects.get(&offset) {
+            Ok(Some(obj.clone()))
+        } else {
+            Ok(None)
         }
+
     }
 
-    fn find_by_offset(&self, mut offset: usize) -> IOResult<Option<GitObject>> {
-        // Read the initial offset.
-        //
-        // If it is a base object, return the enclosing object.
-        let mut object = self.read_at_offset(offset)?;
-        if let PackObject::Base(base) = object {
-            return Ok(Some(base));
-        };
-        // Otherwise we will have to recreate the delta object.
-        //
-        // To do this, we accumulate the entire delta chain into a vector by repeatedly
-        // following the references to the next base object.
-        //
-        // We need to keep track of all the offsets so they are correct.
-        let mut patches = Vec::new();
-
-        while !object.is_base() {
-            let next;
-            match object {
-                PackObject::OfsDelta(delta_offset, patch) => {
-                    patches.push(patch);
-                    // This offset is *relative* to its own position
-                    // We don't need to store multiple chains because a delta chain
-                    // will either be offsets or shas but not both.
-                    offset -= delta_offset;
-                    next = Some(self.read_at_offset(offset)?);
-                }
-                PackObject::RefDelta(sha, patch) => {
-                    patches.push(patch);
-                    next = self.find_by_sha_unresolved(&sha.to_hex())?;
-                }
-                _ => unreachable!(),
-            }
-            match next {
-                Some(o) => object = o,
-                None => return Ok(None),
-            }
-        }
-        // The patches then look like: vec![patch3, patch2, patch1]
-        //
-        // These patches are then popped off the end, applied in turn to create the desired object.
-        // We could cache these results along the way in some offset cache to avoid repeatedly
-        // recreating the chain for any object along it, but this shouldn't be necessary
-        // for most operations since we will only be concerned with the tip of the chain.
-        while let Some(patch) = patches.pop() {
-            object = object.patch(&patch).unwrap();
-            // TODO: Cache here
-        }
-        Ok(Some(object.unwrap()))
-    }
-
-    fn read_at_offset(&self, offset: usize) -> IOResult<PackObject> {
-        let total_offset = offset - HEADER_LENGTH;
-        let contents = &self.encoded_objects[total_offset..];
-        let mut reader = ObjectReader::new(contents);
-        reader.read_object()
-    }
 }
 
 #[derive(Debug)]
@@ -200,159 +147,6 @@ impl PackObject {
     }
 }
 
-const BUFFER_SIZE: usize = 4 * 1024;
-
-pub struct ObjectReader<R> {
-    inner: R,
-    pos: usize,
-    cap: usize,
-    consumed_bytes: usize,
-    buf: [u8; BUFFER_SIZE],
-}
-
-impl<R> ObjectReader<R>
-where
-    R: Read,
-{
-    pub fn new(inner: R) -> Self {
-        ObjectReader {
-            inner,
-            pos: 0,
-            cap: 0,
-            consumed_bytes: 0,
-            buf: [0; BUFFER_SIZE],
-        }
-    }
-
-    pub fn read_object(&mut self) -> IOResult<PackObject> {
-        let mut c = self.read_u8()?;
-        let type_id = (c >> 4) & 7;
-
-        let mut size: usize = (c & 0xf) as usize;
-        let mut shift: usize = 4;
-
-        // Parse the variable length size header for the object.
-        // Read the MSB and check if we need to continue
-        // consuming bytes to get the object size
-        while c & 0x80 > 0 {
-            c = self.read_u8()?;
-            size += ((c & 0x7f) as usize) << shift;
-            shift += 7;
-        }
-
-        match type_id {
-            1 | 2 | 3 | 4 => {
-                let content = self.read_object_content(size)?;
-                let base_type = match type_id {
-                    1 => GitObjectType::Commit,
-                    2 => GitObjectType::Tree,
-                    3 => GitObjectType::Blob,
-                    4 => GitObjectType::Tag,
-                    _ => unreachable!(),
-                };
-                Ok(PackObject::Base(GitObject::new(base_type, content)))
-            }
-            6 => {
-                let offset = self.read_offset()?;
-                let content = self.read_object_content(size)?;
-                Ok(PackObject::OfsDelta(offset, content))
-            }
-            7 => {
-                let mut base: [u8; 20] = [0; 20];
-                self.read_exact(&mut base)?;
-                let content = self.read_object_content(size)?;
-                Ok(PackObject::RefDelta(base, content))
-            }
-            _ => panic!("Unexpected id : {} for git object", type_id),
-        }
-    }
-
-    // Offset encoding.
-    // n bytes with MSB set in all but the last one.
-    // The offset is then the number constructed
-    // by concatenating the lower 7 bits of each byte, and
-    // for n >= 2 adding 2^7 + 2^14 + ... + 2^(7*(n-1))
-    // to the result.
-    fn read_offset(&mut self) -> IOResult<usize> {
-        let mut c = self.read_u8()?;
-        let mut offset = (c & 0x7f) as usize;
-        while c & 0x80 != 0 {
-            c = self.read_u8()?;
-            offset += 1;
-            offset <<= 7;
-            offset += (c & 0x7f) as usize;
-        }
-        Ok(offset)
-    }
-
-    pub fn consumed_bytes(&self) -> usize {
-        self.consumed_bytes
-    }
-
-    fn read_object_content(&mut self, size: usize) -> IOResult<Vec<u8>> {
-        let mut decompressor = Decompress::new(true);
-        let mut object_buffer = Vec::with_capacity(size);
-
-        loop {
-            let last_total_in = decompressor.total_in();
-            let res = {
-                let zlib_buffer = self.fill_buffer()?;
-                decompressor.decompress_vec(zlib_buffer, &mut object_buffer, FlushDecompress::None)
-            };
-            let nread = decompressor.total_in() - last_total_in;
-            self.consume(nread as usize);
-
-            match res {
-                Ok(Status::StreamEnd) => {
-                    if decompressor.total_out() as usize != size {
-                        panic!("Size does not match for expected object contents");
-                    }
-
-                    return Ok(object_buffer);
-                }
-                Ok(Status::BufError) => panic!("Encountered zlib buffer error"),
-                Ok(Status::Ok) => (),
-                Err(e) => panic!("Encountered zlib decompression error: {}", e),
-            }
-        }
-    }
-
-    fn fill_buffer(&mut self) -> IOResult<&[u8]> {
-        // If we've reached the end of our internal buffer then we need to fetch
-        // some more data from the underlying reader.
-        if self.pos == self.cap {
-            self.cap = self.inner.read(&mut self.buf)?;
-            self.pos = 0;
-        }
-        Ok(&self.buf[self.pos..self.cap])
-    }
-
-    fn consume(&mut self, amt: usize) {
-        self.consumed_bytes += amt;
-        self.pos = cmp::min(self.pos + amt, self.cap);
-    }
-}
-
-impl<R: Read> Read for ObjectReader<R> {
-    fn read(&mut self, buf: &mut [u8]) -> IOResult<usize> {
-        // If we don't have any buffered data and we're doing a massive read
-        // (larger than our internal buffer), bypass our internal buffer
-        // entirely.
-        if self.pos == self.cap && buf.len() >= self.buf.len() {
-            let nread = self.inner.read(buf)?;
-            // We still want to keep track of the correct offset so
-            // we consider this consumed.
-            self.consumed_bytes += nread;
-            return Ok(nread);
-        }
-        let nread = {
-            let mut rem = self.fill_buffer()?;
-            rem.read(buf)?
-        };
-        self.consume(nread);
-        Ok(nread)
-    }
-}
 
 #[cfg(test)]
 mod tests {
