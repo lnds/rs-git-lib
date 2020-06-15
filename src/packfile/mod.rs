@@ -23,7 +23,7 @@ pub struct PackFile {
     hexsha: String,
     pub index: PackIndex,
     objects: HashMap<String, GitObject>,
-    offset_objects: HashMap<usize, GitObject>,
+    //offset_objects: HashMap<usize, GitObject>,
 }
 
 impl PackFile {
@@ -87,21 +87,10 @@ impl PackFile {
     }
 
     pub fn find_by_sha(&self, sha: &str) -> IOResult<Option<GitObject>> {
-        if let Some(obj) = self.objects.get(sha) {
-            Ok(Some(obj.clone()))
-        } else {
-            Ok(None)
-        }
+        Ok(self.objects.get(sha).cloned())
     }
 
-    #[allow(dead_code)]
-    fn find_by_offset(&self, offset: usize) -> IOResult<Option<GitObject>> {
-        if let Some(obj) = self.offset_objects.get(&offset) {
-            Ok(Some(obj.clone()))
-        } else {
-            Ok(None)
-        }
-    }
+
 }
 
 #[derive(Debug)]
@@ -131,12 +120,10 @@ mod tests {
     static PACK_FILE: &'static str =
         "tests/data/packs/pack-79f006bb5e8d079fdbe07e7ce41f97f4db7d341c.pack";
 
-    static BASE_OFFSET: usize = 2154;
     static BASE_SHA: &'static str = "7e690abcc93718dbf26ddea5c6ede644a63a5b34";
     // We need to test reading an object with a non-trivial delta
     // chain (4).
     static DELTA_SHA: &'static str = "9b104dc31028e46f2f7d0b8a29989ab9a5155d41";
-    static DELTA_OFFSET: usize = 2461;
     static DELTA_CONTENT: &'static str =
         "This is a test repo, used for testing the capabilities of the rgit tool. \
         rgit is a implementation of\n\
@@ -163,14 +150,6 @@ mod tests {
         assert_eq!(on_disk, encoded);
     }
 
-    #[test]
-    fn reading_a_packed_object_by_offset() {
-        let pack = read_pack();
-        // Read a base object
-        pack.find_by_offset(BASE_OFFSET).unwrap().unwrap();
-        // Read a deltified object
-        pack.find_by_offset(DELTA_OFFSET).unwrap().unwrap();
-    }
 
     #[test]
     fn reading_a_packed_object_by_sha() {
