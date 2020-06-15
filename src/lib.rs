@@ -337,3 +337,4 @@ fn get_index_entry(
         path: relative_path.to_str().unwrap().to_owned(),
     })
 }
+

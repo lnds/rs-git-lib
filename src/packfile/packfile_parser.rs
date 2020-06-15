@@ -119,10 +119,6 @@ impl PackFileParser {
         objects.append(&mut ofs_deltas);
 
         let index = index_opt.unwrap_or(PackIndex::from_objects(&mut objects, &sha_computed, dir)?);
-        let offset_objects = objects
-            .iter()
-            .map(|(offset, _, obj)| (*offset, obj.clone()))
-            .collect();
         let objects = objects
             .iter()
             .map(|(_, _, obj)| (obj.sha(), obj.clone()))
@@ -135,7 +131,6 @@ impl PackFileParser {
             hexsha: sha_computed,
             index,
             objects,
-            offset_objects,
         })
     }
     pub(crate) fn add_line(&mut self, line: &[u8]) -> IOResult<()> {
