@@ -88,7 +88,7 @@ impl Repo {
     }
 
     ///
-    /// return references of cloned repo
+    /// return output directory of cloned repo
     ///
     /// ```
     /// use rs_git_lib::Repo;
@@ -111,6 +111,40 @@ impl Repo {
     /// ```
     pub fn count_objects(self) -> usize {
         self.count_objects
+    }
+
+    ///
+    /// return the list of commit objects from current branch
+    ///
+    /// ```
+    /// use rs_git_lib::Repo;
+    /// let repo = Repo::clone_from("https://github.com/lnds/redondeo.git", Some("/tmp/redondeo".to_string())).unwrap();
+    /// let commits = repo.commits().unwrap();
+    /// assert_eq!(commits.len(), 5);
+    /// assert_eq!(commits[4].as_commit().unwrap().get_message(), "Initial commit".to_string())
+    pub fn commits(&self) -> IOResult<Vec<GitObject>> {
+        let tip = resolve_ref(&self.dir, "HEAD")?;
+        let mut result = Vec::new();
+        let head = self.read_object(&tip)?;
+        if head.object_type == GitObjectType::Commit {
+            result.push(head.clone());
+            let commit = head.as_commit().ok_or(Error::new(ErrorKind::Other, "head is not a commit"))?;
+            self.search_parents(&mut result, &commit)?;
+        }
+        Ok(result)
+    }
+
+    fn search_parents(&self, mut vec_of_commits: &mut Vec<GitObject>, commit: &Commit) -> IOResult<()>{
+        if commit.has_parents() {
+            for parent in commit.parents.iter() {
+                let obj = self.read_object(parent)?;
+                if obj.object_type == GitObjectType::Commit {
+                    vec_of_commits.push(obj.clone());
+                    self.search_parents(&mut vec_of_commits, &obj.as_commit().unwrap())?;
+                }
+            }
+        }
+        Ok(())
     }
 
     fn checkout_head(&self) -> IOResult<()> {
