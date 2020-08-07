@@ -11,7 +11,7 @@ use std::fs::File;
 use std::io::{Error, ErrorKind, Read, Result as IOResult, Write};
 use std::path::PathBuf;
 
-#[derive(Debug, Copy, Clone, FromPrimitive)]
+#[derive(Debug, Copy, Clone, FromPrimitive, PartialEq)]
 pub enum GitObjectType {
     Commit = 1,
     Tree = 2,
