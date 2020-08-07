@@ -126,15 +126,18 @@ impl Repo {
         let tip = resolve_ref(&self.dir, "HEAD")?;
         let mut result = Vec::new();
         let head = self.read_object(&tip)?;
-        if head.object_type == GitObjectType::Commit {
+        if let Some(commit) = head.as_commit() {
             result.push(head.clone());
-            let commit = head.as_commit().ok_or(Error::new(ErrorKind::Other, "head is not a commit"))?;
             self.search_parents(&mut result, &commit)?;
         }
         Ok(result)
     }
 
-    fn search_parents(&self, mut vec_of_commits: &mut Vec<GitObject>, commit: &Commit) -> IOResult<()>{
+    fn search_parents(
+        &self,
+        mut vec_of_commits: &mut Vec<GitObject>,
+        commit: &Commit,
+    ) -> IOResult<()> {
         if commit.has_parents() {
             for parent in commit.parents.iter() {
                 let obj = self.read_object(parent)?;
@@ -371,4 +374,3 @@ fn get_index_entry(
         path: relative_path.to_str().unwrap().to_owned(),
     })
 }
-

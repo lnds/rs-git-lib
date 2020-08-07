@@ -10,11 +10,9 @@ Rust Native Git Library
     let commits = repo.commits();
     assert_eq!(commits[commits.len()].as_commit().unwrap().get_message(), "Initial commit")
 
+## Notes
 
-    
-## Note
+- only works with http or https for now
 
-This work started from the ideas and code in Rgit project by @cwbriones:
-
-    https://github.com/cwbriones/rgit
+- This work started from the ideas and code in Rgit project by @cwbriones: https://github.com/cwbriones/rgit
     
