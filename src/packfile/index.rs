@@ -160,7 +160,7 @@ impl PackIndex {
         let end = self.fanout[fan] as usize;
         self.shas[start..=end]
             .binary_search_by(|ref s| s[..].cmp(sha))
-            .and_then(|i| Ok(self.offsets[i + start] as usize))
+            .map(|i| self.offsets[i + start] as usize)
             .ok()
     }
 

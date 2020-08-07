@@ -24,7 +24,7 @@ pub struct Commit<'a> {
 }
 
 impl<'a> Commit<'a> {
-
+    /// returns true if commit has parents
     pub fn has_parents(&self) -> bool {
         !self.parents.is_empty()
     }
@@ -43,8 +43,20 @@ impl<'a> Commit<'a> {
         })
     }
 
+    /// returns commit message
     pub fn get_message(&self) -> String {
         self.message.to_string()
+    }
+
+
+    /// returns commit author
+    pub fn get_author(&self) -> Person {
+        self.author.clone()
+    }
+
+    /// returns commit committer
+    pub fn get_committer(&self) -> Person {
+        self.committer.clone()
     }
 }
 
@@ -85,11 +97,11 @@ named!(parse_person(&[u8]) -> Person,
             };
             let naive = NaiveDateTime::from_timestamp(ts as i64, 0);
             let offset = FixedOffset::east(sgn * tz/100 * 3600);
-            let datetime = DateTime::from_utc(naive, offset);
+            let timestamp = DateTime::from_utc(naive, offset);
             Person {
-                name: name,
-                email: email,
-                timestamp: datetime
+                name,
+                email,
+                timestamp,
             }
         })
     )

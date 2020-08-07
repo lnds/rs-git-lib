@@ -44,7 +44,7 @@ impl Protocol for HttpProtocol {
             ));
         }
 
-        let first = read_packet_line(&mut res)?.unwrap_or_else(|| vec![]);
+        let first = read_packet_line(&mut res)?.unwrap_or_else(std::vec::Vec::new);
         if first != GIT_UPLOAD_PACK_HEADER {
             return Err(Error::new(ErrorKind::Other, "flush not received"));
         }

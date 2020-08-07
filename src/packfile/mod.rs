@@ -89,8 +89,6 @@ impl PackFile {
     pub fn find_by_sha(&self, sha: &str) -> IOResult<Option<GitObject>> {
         Ok(self.objects.get(sha).cloned())
     }
-
-
 }
 
 #[derive(Debug)]
@@ -149,7 +147,6 @@ mod tests {
 
         assert_eq!(on_disk, encoded);
     }
-
 
     #[test]
     fn reading_a_packed_object_by_sha() {
