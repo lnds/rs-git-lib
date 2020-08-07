@@ -5,14 +5,15 @@ use nom::character::complete::{digit1, line_ending, newline, space0, space1};
 use nom::combinator::rest;
 use std::str::from_utf8;
 use std::str::{self, FromStr};
-#[derive(Debug)]
+
+#[derive(Debug, Clone)]
 pub struct Person<'a> {
     name: &'a str,
     email: &'a str,
     timestamp: DateTime<FixedOffset>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Commit<'a> {
     pub tree: &'a str,
     pub parents: Vec<&'a str>,
@@ -23,6 +24,11 @@ pub struct Commit<'a> {
 }
 
 impl<'a> Commit<'a> {
+
+    pub fn has_parents(&self) -> bool {
+        !self.parents.is_empty()
+    }
+
     pub fn from_raw(obj: &'a GitObject) -> Option<Self> {
         parse_commit_inner(&obj.content).ok().map(|(_, raw_parts)| {
             let (tree, parents, author, committer, message) = raw_parts;
@@ -35,6 +41,10 @@ impl<'a> Commit<'a> {
                 raw: obj,
             }
         })
+    }
+
+    pub fn get_message(&self) -> String {
+        self.message.to_string()
     }
 }
 
